@@ -1,73 +1,251 @@
-/* Filename: Lab 6 Task iv.cpp
+/* Filename: Lab 6 Task v.cpp
 Author: Brandon Mills Jacinto
 Date: 20/03/2025
 */
 #include "mbed.h" // Mbed Library for hardware control
 #include "display.h" // Display library used for LCD
 
+DigitalOut MaxAttemptsReached(LED1); // LED1 lights up when Max Attempts have been reached
+DigitalOut AlarmCode(LED2); // LED2 states the Alarm Code
+DigitalOut Alarm(LED3); // LED3 states the Alarm
+AnalogIn GasSensor(A2); // Gas Sensor input in connected in Pin A2
+AnalogIn TemperatureSensor(A1); // Temp Sensor input in connected in Pin A1
+
 float TemperatureReading; // Variable to store temperature reading
 float GasSensorReading; // Variable to store gas sensor reading
 int GasAlarm; // Function for gas alarm 
 int TemperatureAlarm; // Function for temperature alarm 
-AnalogIn GasSensor(A2); // Analog input for gas sensor (connected to pin A2)
-AnalogIn TemperatureSensor(A1); // Analog input  for temperature sensor (connected to pin A1)
-#define TIME_INCREMENT_MS 10 // Time increment for the main loop (in milliseconds)
-
 int Tick = 0; // Declares an integer variable named 'Tick' and initialises it to 0.
-// Lines 18-20 declares functions
+
+#define THE_NUMBER_OF_KEYS 4 // Number of keys in the code sequence
+#define THE_DEBOUNCE_KEY_TIME_MS 40  // Debounce time for keypad (ms)
+#define TIME_INCREMENT_MS 10 // Time increment for the main loop (in milliseconds)
+#define THE_KEYPAD_NUMBER_OF_ROWS 4 // Number of rows in keypad
+#define THE_KEYPAD_NUMBER_OF_COLUMNS 4 // Number of columns in keypad
+
+bool AlarmState = false; // Alarm state (ON/OFF)
+int AccumulatedTimeAlarm = 0; // Timer for alarm blinking
+DigitalOut KeypadRowPins[THE_KEYPAD_NUMBER_OF_ROWS] = {PB_3, PB_5, PC_7, PA_15}; // Row pins for keypad
+DigitalIn KeypadColPins[THE_KEYPAD_NUMBER_OF_COLUMNS] = {PB_12, PB_13, PB_15, PC_6}; // Column pins for keypad
+// Lines 31-35 states definitions for matrix keypad
+typedef enum {
+MATRIX_KEYPAD_SCANNING,
+MATRIX_KEYPAD_DEBOUNCE,
+ MATRIX_KEYPAD_KEY_HOLD_PRESSED
+} MatrixKeypadState_t;
+
+int TheNumberOfIncorrectCodes = 0; // Count of incorrect code entrie
+int TheNumberOfHashKeyEventsReleased = 0; // Count of hashtag key release events
+int TheKeyIsBeingCompared = 0; // Index for comparing entered code
+char CodeSequence[THE_NUMBER_OF_KEYS] = {'2','2','0','4'}; // Correct code sequence
+char KeyPressed[THE_NUMBER_OF_KEYS] = {'0','0','0','0'}; // Entered code sequence
+int AccumulatedDebounceMatrixKeypadTime = 0; // Timer for alarm blinking
+int MatrixKeypadCodeIndex = 0; // Index for entered code in keypad
+char MatrixKeypadKeyLastPressed = '\0'; // Last key pressed on keypad
+char MatrixKeypadIndexToCharArray[] = { // Keypad layout
+'1', '2', '3', 'A',
+'4', '5', '6', 'B',
+'7', '8', '9', 'C',
+'*', '0', '#', 'D',
+};
+MatrixKeypadState_t MatrixKeypadState; // Current state of keypad
+// Lines 53-60 are for decalring functions
 void Init();
+void AlarmDeactivationUpdate();
+void AlarmActivationUpdate();
+void MatrixKeypadInit();
+char MatrixKeypadScan();
+char MatrixKeypadUpdate();
+bool AreEqual();
 void LCDUpdate();
-void AlarmActivationUpdate();   
 
 int main()
-{  while( true ) { // Infinite loop
-   LCDUpdate(); // Updates the LCD display
-AlarmActivationUpdate(); // Updates the alarm status based on sensor readings
-      ThisThread::sleep_for(10ms); // Delay for 10ms
+{
+Init(); // Initialises the LCD
+ while( true ) {  // Infinite loop
+AlarmDeactivationUpdate(); // Updates the alarm status based on sensor readings
+    AlarmActivationUpdate(); // Updates the alarm status based on sensor readings
+LCDUpdate(); // Updates the LCD display
+ThisThread::sleep_for(10ms); // Delay for 10ms
     }
 }
+void Init(){ // Initialises the LCD
+MatrixKeypadInit(); // Initialises the keypad
+}
+void AlarmDeactivationUpdate() // Updates the alarm status based on sensor readings
+{
+char KeyReleased = MatrixKeypadUpdate(); // Gets the key that was released
+if (TheNumberOfIncorrectCodes < 5 ) { // Checks if max attempts have not been reached
+   if(KeyReleased != '\0' && KeyReleased != '#') { // If a valid key (not '#') is released
+     KeyPressed[MatrixKeypadCodeIndex] = KeyReleased; // Store the key in the entered code sequence
+            if(MatrixKeypadCodeIndex >= THE_NUMBER_OF_KEYS ) { // If the code index is at the end of the sequence...
+    MatrixKeypadCodeIndex = 0; // ... Reset the code index
+     } else { // Else ...
+    MatrixKeypadCodeIndex++; // ... Increment the code index
+            }
+        }
+if (KeyReleased == '#') {  // If the '#' key is released
+    if (AlarmCode) { // If the incorrect code LED is set
+        TheNumberOfHashKeyEventsReleased++; // Increment the '#' key release counter
+        if (TheNumberOfHashKeyEventsReleased >= 2) { // If '#' key is released twice
+            AlarmCode = false; // Clear the incorrect LED
+            TheNumberOfHashKeyEventsReleased = 0; // Reset the '#' key release counter
+            MatrixKeypadCodeIndex = 0; // Reset the code index
+        }
+    } else { // Else if the incorrect code LED is not set
+        if (AlarmState) { // If the alarm is active
+            if (AreEqual()) { // Check if the entered code matches the correct code
+                AlarmState = false; // Deactivate the alarm
+                Alarm = false; // Turn off the alarm LED
+                TheNumberOfIncorrectCodes = 0; // Reset the incorrect code counter
+                MatrixKeypadCodeIndex = 0; // Reset the code index
+            } else { // Else if the entered code is incorrect
+                AlarmCode = true; // Set the incorrect code LED to on
+                TheNumberOfIncorrectCodes++; // Increment the incorrect code counter
+            }
+        }
+    }
+}
+    } else { // Else if the max attempts have been reached
+    MaxAttemptsReached = true; // Turn on the max attempts reached LED
+    }
+}
+// Lines 114-119 check to see if the entered code matches the correct code
+bool AreEqual()
+{
+    int i;
+ for (i = 0; i < THE_NUMBER_OF_KEYS; i++) {
+    if (CodeSequence[i] != KeyPressed[i]) {
+                return false; // Return false if codes don't match
+        }
+    }
+ return true; // Return true if codes match
+}
+void AlarmActivationUpdate() // Updates the alarm status based on sensor readings
+{
+ if( !AlarmState && (TemperatureAlarm == true || GasSensorAlarm == true)) {  // If the alarm is inactive and either sensor alarm is active          
+        AlarmState = true; // Activate the alarm
+        Alarm = true; // Turn on the alarm LED
+    }
+    TemperatureReading = TemperatureSensor.read()*330; // Reads temp sensor and converts to celcius
+    if(TemperatureReading >= 25){ // If temp sensor is more than and equal to 25...
+ TemperatureAlarm = true;  //... Temp alarm is on
+    } else {  // Else...
+        TemperatureAlarm = false; //... Temp alarm is off
+    }
+    GasSensorReading = GasSensor.read()*3.3; // Reads gas sensor and converts to ppm
+    if(GasSensorReading >= 0.7) { // If gas sensor is more than and equal to 0.7...
+        GasSensorAlarm = true; //... Gas alarm is on
+    } else { // Else...
+          GasSensorAlarm = false; //... Gas alarm is off
+    }
+}
+void MatrixKeypadInit()
+{
+MatrixKeypadState = MATRIX_KEYPAD_SCANNING;
+    int PinIndex = 0;
+for(PinIndex=0; PinIndex<THE_KEYPAD_NUMBER_OF_COLUMNS; PinIndex++ ) {
+  (KeypadColumnPins[PinIndex]).mode(PullUp);
+    }
+}
+char MatrixKeypadScan() // Initialises the keypad
+{
+    // Lines 154-168 scans the keypad for key presses
+int row = 0;
+     int column = 0;
+   int i = 0;
+    for(row=0; row<THE_KEYPAD_NUMBER_OF_ROWS; row++) {
+     for( i=0; i<THE_KEYPAD_NUMBER_OF_ROWS; i++ ) {
+    KeypadRowPins[i] = true;
+    }
+KeypadRowPins[row] = false;
+  for(column=0; column<THE_KEYPAD_NUMBER_OF_COLUMNS; column++ ) {
+    if(KeypadColumnPins[column] == false ) {
+return MatrixKeypadIndexToCharArray[row*THE_KEYPAD_NUMBER_OF_ROWS + column];
+      }
+  }
+}
+ return '\0';
+}
+// Lines 171-209 updates the matrix keypad
+char MatrixKeypadUpdate()
+{
+char KeyDetected = '\0';
+     char KeyReleased = '\0';
+    switch(MatrixKeypadState) {
+ case MATRIX_KEYPAD_SCANNING:
+    KeyDetected = MatrixKeypadScan();
+        if(KeyDetected != '\0') {
+MatrixKeypadKeyLastPressed = KeyDetected;
+  AccumulatedDebounceMatrixKeypadTime = 0;
+    MatrixKeypadState = MATRIX_KEYPAD_DEBOUNCE;
+        }
+ break;
+case MATRIX_KEYPAD_DEBOUNCE:
+    if(AccumulatedDebounceMatrixKeypadTime >=
+    THE_DEBOUNCE_KEY_TIME_MS ) {
+   KeyDetected = MatrixKeypadScan();
+ if(KeyDetected == MatrixKeypadKeyLastPressed ) {
+   MatrixKeypadState = MATRIX_KEYPAD_KEY_HOLD_PRESSED;
+   } else {
+     MatrixKeypadState = MATRIX_KEYPAD_SCANNING;
+          }
+      }
+        AccumulatedDebounceMatrixKeypadTime = AccumulatedDebounceMatrixKeypadTime + TIME_INCREMENT_MS;
+  break;
+ case MATRIX_KEYPAD_KEY_HOLD_PRESSED:
+   KeyDetected = MatrixKeypadScan();
+    if(KeyDetected != MatrixKeypadKeyLastPressed ) {
+       if(KeyDetected == '\0') {
+    KeyReleased = MatrixKeypadKeyLastPressed;
+            }
+    MatrixKeypadState = MATRIX_KEYPAD_SCANNING;
+        }
+     break;
+default:
+    MatrixKeypadInit();
+          break;
+}
+    return KeyReleased;
+}
+
 void LCDUpdate() // Updates LCD display function
-  if (Tick % 100 == 0){ // Ticks for 1 second
-  if(GasSensorAlarm == true && TemperatureAlarm == true){ // If both gas and temperature alarms are active...
+{ 
+    if (Tick % 300 == 0){ // Ticks for 3 seconds
+if(GasSensorAlarm == true && TemperatureAlarm == true) { // If both gas and temperature alarms are active...
    displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
  displayCharPositionWrite (0,0); // This sets the cursor to the first line and the first column
- displayStringWrite("ALERT!"); // Display "ALERT!" message
- displayCharPositionWrite (0,1);  // This sets the cursor to the second line and the first column
-  displayStringWrite("GAS IS OVER LIMIT!"); // Display "GAS IS OVER LIMIT!" message
+  displayStringWrite("Gas Alarm = Active"); // Display "Gas Alarm = Active" message
+   displayCharPositionWrite (0,1); // This sets the cursor to the second line and the first column
+      displayStringWrite("Temp Alarm = Active"); // Display "Temp Alarm = Active" message
  displayCharPositionWrite (0,2); // This sets the cursor to the third line and the first column
-displayStringWrite("TEMP IS OVER LIMIT!"); // Display "TEMP IS OVER LIMIT!" message
-        }
-if(GasSensorAlarm == true && TemperatureAlarm == false) { // If gas alarm is active and not temp alarm...
-displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
-    displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
-    displayStringWrite("ALERT!"); // Display "ALERT!" message
-displayCharPositionWrite (0,1); // This sets the cursor to the second line and the first column
-            displayStringWrite("GAS IS OVER LIMIT!"); // Display "GAS IS OVER LIMIT!" message
-        }
-     if(TemperatureAlarm == true && GasSensorAlarm == false) { // If temp alarm is active and not gas alarm... 
-         displayInit( DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER ); // Initialise the LCD
-         displayCharPositionWrite ( 0,1 ); // This sets the cursor to the second line and the first column
-     displayStringWrite("TEMP IS OVER LIMIT!") ; // Display "TEMP IS OVER LIMIT!" message
-        }
- if(TemperatureAlarm == false && GasSensorAlarm == false) { // If gas alarm and temp alarm are not active... 
-     displayInit( DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER ); // Initialise the LCD
-       displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
-           displayStringWrite("Gas and Temp is in  SAFE LIMITS!"); // Display "Gas and Temp is in  SAFE LIMITS!" message
-        }
+    displayStringWrite("Enter code on keypad"); // Display "Enter code on keypad" message
+   displayCharPositionWrite (0,3); // This sets the cursor to the fourth line and the first column
+      displayStringWrite("to stop the alarm"); // Display "to stop the alarm" message
     }
-    Tick = Tick + 1; // Tick counter goes up by +1
-void AlarmActivationUpdate()
-{
-TemperatureReading = TemperatureSensor.read()*330; // Reads temp sensor and converts to celcius
- if(TemperatureReading >= 22) { // If temp sensor is more than and equal to 22...
-   TemperatureAlarm = true; //... Temp alarm is on
-} else { // Else...
-  TemperatureAlarm = false; //... Temp alarm is off
-    }
-GasSensorReading = GasSensor.read()*3.3; // Reads gas sensor and converts to ppm
- if(GasSensorReading >= 0.8) { // If gas sensor is more than and equal to 0.8...
-   GasSensorAlarm = true; //... Gas alarm is on
-} else { // Else...
-    GasSensorAlarm = false; //... Gas alarm is off
-    }
+ if(GasSensorAlarm == true && TemperatureAlarm == false){ // If gas alarm is active and not temp alarm...
+     displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
+   displayCharPositionWrite(0,0); // This sets the cursor to the first line and the first column
+displayStringWrite("Gas Alarm = Active"); // Display "Gas Alarm = Active" message
+        displayCharPositionWrite (0,1); // This sets the cursor to the second line and the first column
+  displayStringWrite("Enter code on keypad"); // Display "Enter code on keypad" message
+     displayCharPositionWrite(0,2); // This sets the cursor to the third line and the first column
+ displayStringWrite("to stop the alarm"); // Display "to stop the alarm" message
+   }
+        if(TemperatureAlarm == true && GasSensorAlarm == false) { // If temp alarm is active and not gas alarm... 
+   displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER);  // Initialise the LCD
+      displayCharPositionWrite(0,0); // This sets the cursor to the first line and the first column
+           displayStringWrite("Temp Alarm = Active"); // Display "Temp Alarm = Active" message
+    displayCharPositionWrite (0,1); // This sets the cursor to the second line and the first column
+  displayStringWrite("Enter code on keypad"); // Display "Enter code on keypad" message
+            displayCharPositionWrite (0,2); // This sets the cursor to the third line and the first column
+            displayStringWrite("to stop the alarm"); // Display "to stop the alarm" message
+     }
+  if(TemperatureAlarm == false && GasSensorAlarm == false && AlarmState == false) { // If gas alarm and temp alarm are not active... 
+      displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
+    displayCharPositionWrite (0,0); // This sets the cursor to the first line and the first column
+  displayStringWrite("There are no ACTIVE ALARMS!"); // Display "There are no ACTIVE ALARMS!" message
+     }
+ }
+ Tick = Tick + 1; // Tick counter goes up by +1
 }
