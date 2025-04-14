@@ -1,0 +1,178 @@
+/* Filename: Lab 6 Task i.cpp
+Author: Brandon Mills Jacinto
+Date: 20/03/2025
+*/
+#include "mbed.h" // Mbed Library for hardware control
+#include "display.h" // Display library used for LCD
+
+float TemperatureReading; // Variable to store temperature reading
+float GasSensorReading; // Variable to store gas sensor reading
+int GasAlarm; // Function for gas alarm 
+int TemperatureAlarm; // Function for temperature alarm 
+AnalogIn GasSensor(A2); // Analog input for gas sensor (connected to pin A2)
+AnalogIn TemperatureSensor(A1); // Analog input  for temperature sensor (connected to pin A1)
+#define TIME_INCREMENT_MS 10 // Time increment for the main loop (in milliseconds)
+
+// Lines 17-18 is the Keypad configuration
+DigitalOut KeypadRowPins[THE_KEYPAD_NUMBER_OF_ROWS] = {PB_3, PB_5, PC_7, PA_15}; // Row pins of the keypad
+DigitalIn KeypadColumnsPins[THE_KEYPAD_NUMBER_OF_COLUMNS] = {PB_12, PB_13, PB_15, PC_6}; // Column pins of the keypad
+
+// Lines 21-25 is for the keypad state
+typedef enum {
+MATRIX_KEYPAD_SCANNING,
+MATRIX_KEYPAD_DEBOUNCE,
+MATRIX_KEYPAD_KEY_HOLD_PRESSED
+} MatrixKeypadState_t;
+
+// Keypad related variables
+int TheNumberOfIncorrectCodes = 0; // Counter for incorrect code entries 
+int TheNumberOfHashKeyReleasedEvents = 0; // Counter for '#' key release events 
+int TheKeyBeingCompared = 0; // Index for code comparison 
+char TheCodeSequence[THE_NUMBER_OF_KEYS] = {'2', '2', '0', '4'}; // Correct code sequence 
+char KeyPressed[THE_NUMBER_OF_KEYS] = {'0', '0', '0', '0'}; // Entered code sequence 
+int AccumulatedDebounceOfMatrixKeypadTime = 0; // Debounce timer for keypad
+int TheMatrixKeypadCodeIndex = 0; // Index for entered code 
+char TheMatrixKeypadKeyLastPressed = '\0'; // Last key pressed on the keypad
+char MatrixKeypadIndexToCharArray[] = { // Keypad layout mapping
+    '1', '2', '3', 'A',
+    '4', '5', '6', 'B',
+    '7', '8', '9', 'C',
+    '*', '0', '#', 'D',
+};
+MatrixKeypadState_t MatrixKeypadState; // Current state of the keypad state 
+
+// Decared functions 
+void Init();
+void LCDUpdate();
+void AlarmActivationUpdate();
+void MatrixKeypadInit();
+char MatrixKeypadScan();
+char MatrixKeypadUpdate();
+
+int main() 
+{
+Init(); // Initialises the LCD
+while( true ) { // Infinite loop
+ LCDUpdate(); // Updates the LCD display
+AlarmActivationUpdate(); // Updates the alarm status based on sensor readings
+    ThisThread::sleep_for(TIME_INCREMENT_MS); // Delay for a time_increment_ms
+    } 
+}
+void Init(){ // Initialises the LCD
+MatrixKeypadInit(); // Initialises the keypad
+}
+void LCDUpdate() // Updates LCD display function
+{
+ char KeyBeingReleased = MatrixKeypadUpdate(); // Gets the key that was released
+if(KeyBeingReleased == '2') { // Displays gas alarm status if '2' is pressed
+  displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialises the LCD
+
+displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
+ if(GasAlarm == true){ // If gas alarm is true...
+     displayStringWrite("The Gas Alarm = ON"); // ...  Display this message
+        } else { // Else...
+     displayStringWrite("The Gas Alarm = OFF"); // ...  Display this message
+        }
+    }
+ if(KeyBeingReleased == '3') { // Display temperature alarm status if '3' is pressed
+ displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialises the LCD
+
+      displayCharPositionWrite (0,0); // This sets the cursor to the first line and the first column
+          if(TemperatureAlarm == true){ // If temp alarm is true...
+    displayStringWrite("The Temp Alarm = ON"); // ...  Display this message
+        } else { // Else...
+    displayStringWrite("The Temp Alarm = OFF"); // ...  Display this message
+        }
+    }
+    if (KeyBeingReleased != '\0' && KeyBeingReleased != '2' && KeyBeingReleased != '3') {  // This line displays the instruction message if any other key is pressed
+ displayInit( DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER ); // Initialises the LCD
+     displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
+    displayStringWrite("Key 2 = Gas status"); // Displays gas status
+      displayCharPositionWrite ( 0,1 ); // This sets the cursor to the second line and the first column
+displayStringWrite("Key 3 = Temp status"); // Displays temp status
+    }
+}
+void AlarmActivationUpdate() // Updates the alarm status based on sensor readings
+{
+TemperatureReading = TemperatureSensor.read()*330; // Reads temp sensor and converts to celcius
+ if(TemperatureReading >= 24){  // If temp sensor is more than and equal to 24...
+     TemperatureAlarm = true; //... Temp alarm is on
+    } else { // Else...
+  TemperatureAlarm = false; //... Temp alarm is off
+    }
+GasSensorReading = GasSensor.read()*3.3; // Reads gas sensor and converts to ppm
+    if(GasSensorReading >= 1){ // If gas sensor is more than and equal to 1...
+  GasAlarm = true; //... Temp alarm is on
+    } else { // Else...
+     GasAlarm = false; //... Temp alarm is off
+    }
+}
+void MatrixKeypadInit() // Initialises the keypad
+{
+  MatrixKeypadState = MATRIX_KEYPAD_SCANNING; // This line sets the initial state to start scanning
+ int PinIndex = 0;
+ for(PinIndex=0; PinIndex<THE_KEYPAD_NUMBER_OF_COLUMNS; PinIndex++ ) {
+  (KeypadColumnsPins[PinIndex]).mode(PullUp); // Configures the column pins with pull-up resistors
+    }
+}
+// Lines 119-135 scans the keypad for key presses
+char MatrixKeypadScan()
+{
+     int row = 0;
+ int column = 0;
+ int i = 0;
+    for( row=0; row<THE_KEYPAD_NUMBER_OF_ROWS; row++ ) {
+   for( i=0; i<THE_KEYPAD_NUMBER_OF_ROWS; i++ ) {
+     KeypadRowPins[i] = true;
+        }
+ KeypadRowPins[row] = false;
+ for(column=0; column<THE_KEYPAD_NUMBER_OF_COLUMNS; column++ ) {
+   if(KeypadColumnsPins[column] == false) {
+     return MatrixKeypadIndexToCharArray[row*THE_KEYPAD_NUMBER_OF_ROWS + column];
+            }
+        }
+    }
+    return '\0';
+}
+
+// Lines 138-177 updates the matrix keypad
+char MatrixKeypadUpdate()
+{
+ char KeyDetected = '\0';
+ char KeyBeingReleased = '\0';
+switch(MatrixKeypadState ) {
+case MATRIX_KEYPAD_SCANNING:
+   KeyDetected = MatrixKeypadScan();
+if(KeyDetected != '\0') {
+ TheMatrixKeypadKeyLastPressed = KeyDetected;
+  AccumulatedDebounceOfMatrixKeypadTime = 0;
+ MatrixKeypadState = MATRIX_KEYPAD_DEBOUNCE;
+        }
+ break;
+    case MATRIX_KEYPAD_DEBOUNCE:
+ if(AccumulatedDebounceOfMatrixKeypadTime >=
+        DEBOUNCE_KEY_OF_TIME_MS ) {
+     KeyDetected = MatrixKeypadScan();
+           if(KeyDetected == TheMatrixKeypadKeyLastPressed ) {
+     MatrixKeypadState = MATRIX_KEYPAD_KEY_HOLD_PRESSED;
+     } else {
+     MatrixKeypadState = MATRIX_KEYPAD_SCANNING;
+            }
+        }
+ AccumulatedDebounceOfMatrixKeypadTime = AccumulatedDebounceOfMatrixKeypadTime + TIME_INCREMENT_MS;
+     break;
+    case MATRIX_KEYPAD_KEY_HOLD_PRESSED:
+  KeyDetected = MatrixKeypadScan();
+     if(KeyDetected != TheMatrixKeypadKeyLastPressed ) {
+    if( KeyDetected == '\0' ) {
+   KeyBeingReleased = TheMatrixKeypadKeyLastPressed;
+            }
+     MatrixKeypadState = MATRIX_KEYPAD_SCANNING;
+        }
+ break;
+    default:
+        MatrixKeypadInit();
+   break;
+    }
+    return KeyBeingReleased;
+}
