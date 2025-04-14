@@ -64,8 +64,8 @@ TemperatureReading = TemperatureSensor.read()*330; // Reads temp sensor and conv
     }
 GasSensorReading = GasSensor.read()*3.3; // Reads gas sensor and converts to ppm
     if(GasSensorReading >= 1){ // If gas sensor is more than and equal to 1...
-  GasAlarm = true; //... Temp alarm is on
+  GasAlarm = true; //... Gas alarm is on
     } else { // Else...
-     GasAlarm = false; //... Temp alarm is off
+     GasAlarm = false; //... Gas alarm is off
     }
 }
