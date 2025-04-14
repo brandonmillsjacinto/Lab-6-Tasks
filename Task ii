@@ -1,0 +1,71 @@
+/* Filename: Lab 6 Task ii.cpp
+Author: Brandon Mills Jacinto
+Date: 20/03/2025
+*/
+#include "mbed.h" // Mbed Library for hardware control
+#include "display.h" // Display library used for LCD
+
+float TemperatureReading; // Variable to store temperature reading
+float GasSensorReading; // Variable to store gas sensor reading
+int GasAlarm; // Function for gas alarm 
+int TemperatureAlarm; // Function for temperature alarm 
+AnalogIn GasSensor(A2); // Analog input for gas sensor (connected to pin A2)
+AnalogIn TemperatureSensor(A1); // Analog input  for temperature sensor (connected to pin A1)
+#define TIME_INCREMENT_MS 10 // Time increment for the main loop (in milliseconds)
+
+int Tick = 0; // Declares an integer variable named 'Tick' and initialises it to 0.
+// Lines 18-20 declares functions
+void Init();
+void LCDUpdate();
+void AlarmActivationUpdate();                          
+
+int main()
+{  while( true ) { // Infinite loop
+   LCDUpdate(); // Updates the LCD display
+AlarmActivationUpdate(); // Updates the alarm status based on sensor readings
+      ThisThread::sleep_for(10ms); // Delay for 10ms
+    }
+}
+void LCDUpdate() // Updates LCD display function
+{ 
+  if (Tick % 300 == 0) { // Ticks for 3 seconds
+   if(GasSensorAlarm == true && TemperatureAlarm == true){ // If both gas and temperature alarms are active...
+   displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
+  displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
+  displayStringWrite("Gas Alarm = Active"); // ...  Display this message
+displayCharPositionWrite( 0,1 ); // This sets the cursor to the second line and the first column
+      displayStringWrite("Temp Alarm = Active"); // ...  Display this message
+        }
+ if(GasSensorAlarm == true && TemperatureAlarm == false){ // If gas alarm is active and not temp alarm... 
+      displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
+  displayCharPositionWrite( 0,0 ); // This sets the cursor to the first line and the first column
+   displayStringWrite("Gas Alarm = Active"); // ...  Display this message
+        }
+if(TemperatureAlarm == true && GasSensorAlarm == false){ // If temp alarm is active and not gas alarm... 
+ displayInit( DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER ); // Initialise the LCD
+    displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
+displayStringWrite("Temp Alarm = Active"); // ...  Display this message
+        }
+   if(TemperatureAlarm == false && GasSensorAlarm == false){ // If gas alarm and temp alarm are not active... 
+        displayInit(DISPLAY_CONNECTION_I2C_PCF8574_IO_EXPANDER); // Initialise the LCD
+    displayCharPositionWrite ( 0,0 ); // This sets the cursor to the first line and the first column
+            displayStringWrite( "There are no Active Alarms"); // ...  Display this message
+        }
+    }
+ Tick = Tick + 1; // Tick counter goes up by +1
+}
+void AlarmActivationUpdate() // Updates the alarm status based on sensor readings
+{
+TemperatureReading = TemperatureSensor.read()*330; // Reads temp sensor and converts to celcius
+ if(TemperatureReading >= 24){  // If temp sensor is more than and equal to 24...
+     TemperatureAlarm = true; //... Temp alarm is on
+    } else { // Else...
+  TemperatureAlarm = false; //... Temp alarm is off
+    }
+GasSensorReading = GasSensor.read()*3.3; // Reads gas sensor and converts to ppm
+    if(GasSensorReading >= 1){ // If gas sensor is more than and equal to 1...
+  GasAlarm = true; //... Temp alarm is on
+    } else { // Else...
+     GasAlarm = false; //... Temp alarm is off
+    }
+}
