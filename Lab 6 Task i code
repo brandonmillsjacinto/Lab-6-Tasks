@@ -12,12 +12,16 @@ int TemperatureAlarm; // Function for temperature alarm
 AnalogIn GasSensor(A2); // Analog input for gas sensor (connected to pin A2)
 AnalogIn TemperatureSensor(A1); // Analog input  for temperature sensor (connected to pin A1)
 #define TIME_INCREMENT_MS 10 // Time increment for the main loop (in milliseconds)
+#define THE_KEYPAD_NUMBER_OF_ROWS 4 // Number of rows in keypad
+#define THE_KEYPAD_NUMBER_OF_COLUMNS 4 // Number of columns in keypad
+#define THE_NUMBER_OF_KEYS 4 // Number of keys in the code sequence
+#define DEBOUNCE_KEY_OF_TIME_MS 50 // Debounce time for keypad (ms)
 
-// Lines 17-18 is the Keypad configuration
+// Lines 21-22 is the Keypad configuration
 DigitalOut KeypadRowPins[THE_KEYPAD_NUMBER_OF_ROWS] = {PB_3, PB_5, PC_7, PA_15}; // Row pins of the keypad
 DigitalIn KeypadColumnsPins[THE_KEYPAD_NUMBER_OF_COLUMNS] = {PB_12, PB_13, PB_15, PC_6}; // Column pins of the keypad
 
-// Lines 21-25 is for the keypad state
+// Lines 25-29 is for the keypad state
 typedef enum {
 MATRIX_KEYPAD_SCANNING,
 MATRIX_KEYPAD_DEBOUNCE,
@@ -55,7 +59,7 @@ Init(); // Initialises the LCD
 while( true ) { // Infinite loop
  LCDUpdate(); // Updates the LCD display
 AlarmActivationUpdate(); // Updates the alarm status based on sensor readings
-    ThisThread::sleep_for(TIME_INCREMENT_MS); // Delay for a time_increment_ms
+    ThisThread::sleep_for(10ms); // Delay for a 10ms
     } 
 }
 void Init(){ // Initialises the LCD
@@ -115,7 +119,7 @@ void MatrixKeypadInit() // Initialises the keypad
   (KeypadColumnsPins[PinIndex]).mode(PullUp); // Configures the column pins with pull-up resistors
     }
 }
-// Lines 119-135 scans the keypad for key presses
+// Lines 122-138 scans the keypad for key presses
 char MatrixKeypadScan()
 {
      int row = 0;
@@ -135,7 +139,7 @@ char MatrixKeypadScan()
     return '\0';
 }
 
-// Lines 138-177 updates the matrix keypad
+// Lines 142-181 updates the matrix keypad
 char MatrixKeypadUpdate()
 {
  char KeyDetected = '\0';
