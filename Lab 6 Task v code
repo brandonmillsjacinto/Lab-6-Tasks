@@ -13,7 +13,7 @@ AnalogIn TemperatureSensor(A1); // Temp Sensor input in connected in Pin A1
 
 float TemperatureReading; // Variable to store temperature reading
 float GasSensorReading; // Variable to store gas sensor reading
-int GasAlarm; // Function for gas alarm 
+int GasSensorAlarm; // Function for gas alarm 
 int TemperatureAlarm; // Function for temperature alarm 
 int Tick = 0; // Declares an integer variable named 'Tick' and initialises it to 0.
 
@@ -26,7 +26,7 @@ int Tick = 0; // Declares an integer variable named 'Tick' and initialises it to
 bool AlarmState = false; // Alarm state (ON/OFF)
 int AccumulatedTimeAlarm = 0; // Timer for alarm blinking
 DigitalOut KeypadRowPins[THE_KEYPAD_NUMBER_OF_ROWS] = {PB_3, PB_5, PC_7, PA_15}; // Row pins for keypad
-DigitalIn KeypadColPins[THE_KEYPAD_NUMBER_OF_COLUMNS] = {PB_12, PB_13, PB_15, PC_6}; // Column pins for keypad
+DigitalIn KeypadColumnPins[THE_KEYPAD_NUMBER_OF_COLUMNS] = {PB_12, PB_13, PB_15, PC_6}; // Column pins for keypad
 // Lines 31-35 states definitions for matrix keypad
 typedef enum {
 MATRIX_KEYPAD_SCANNING,
