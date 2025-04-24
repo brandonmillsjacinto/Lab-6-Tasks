@@ -76,3 +76,4 @@ GasSensorReading = GasSensor.read()*3.3; // Reads gas sensor and converts to ppm
     GasSensorAlarm = false; //... Gas alarm is off
     }
 }
+
